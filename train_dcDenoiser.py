@@ -14,6 +14,9 @@ parser = argparse.ArgumentParser(description="DEQ-MPI Learned Consistency Pre-Tr
 parser.add_argument("--useGPU", type=int, default=0,
                     help="GPU ID to be utilized")
 
+parser.add_argument("--outputRoot", type=str, default="",
+                    help="Optional output root; keeps reproduction weights separate from supplied checkpoints")
+
 parser.add_argument("--wd", type=float, default=0,
                     help='weight decay')
 parser.add_argument("--lr", type=float,
@@ -93,8 +96,7 @@ nb_of_blocksLList = np.array(opt.nb_of_blocksLList.split(',')).astype(int)
 lr = opt.lr
 weight_decay = opt.wd
 
-#
-resultFolder = "training/dcDenoiser"
+resultFolder = opt.outputRoot if opt.outputRoot else "training/dcDenoiser"
 
 Ul = list()
 Sl = list()
@@ -184,7 +186,7 @@ def callMyFnc(nb_of_featuresL, nb_of_blocksL, lr, batch_size_train, weight_decay
     optimizer = torch.optim.Adam(
         model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.StepLR(
-        optimizer, step_size=lrUpdateEpoch, gamma=0.5)
+        optimizer, step_size=max(1, lrUpdateEpoch), gamma=0.5)
 
     model, trainMetrics, valMetrics = trainDCdenoiserPsi(model=model,
                                                 epoch_nb=epoch_nb,

@@ -1,0 +1,23 @@
+# Python/runtime
+.venv/
+__pycache__/
+*.py[cod]
+
+# Local datasets and generated MATLAB inference outputs
+datasets/
+Simulated*dBdata.mat
+Simulated*dBresults.mat
+Simulated*dBresultsOnlyPsnr.mat
+
+# External dependencies and large model weights fetched locally
+external/DPIR/
+external/models/
+*.pth
+*.pt
+*.ckpt
+
+# Training outputs, checkpoints, logs, and manuscript figure exports
+training/denoiser/*lieb12*/
+training/reproduction/
+logs/
+wandb/

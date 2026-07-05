@@ -101,7 +101,7 @@ def admmInputGenerator(genData, U_, S_, V_, imgSize):
 
  
 def trainADMMandE2EandImplicit(model, epoch_nb, loss, optimizer, scheduler, trainDataset, valDataset, batch_size_train, batch_size_val, theSysl, sysMtxl, Ul, Sl, Vl, Ml, sysMtxlHR = None, invCrimeFnc = None, imgSizes = [32, 32] \
-    , rescaleVals = [1, 1], saveModelEpoch=0, valEpoch=0, saveDirectory='', pSNRval=30, wandbFlag=False, fixedNoiseStdFlag=False, nbOfSingulars=0, lambdaVal = 1, mode = 0, coloredNoise = 0):
+    , rescaleVals = [1, 1], saveModelEpoch=0, valEpoch=0, saveDirectory='', pSNRval=30, wandbFlag=False, fixedNoiseStdFlag=False, nbOfSingulars=0, lambdaVal = 1, mode = 0, coloredNoise = 0, startEpoch = 0):
     
     variablesEpsFlag = pSNRval == 0
     stdVal = 0.41 * 10**(-(pSNRval) / 20)
@@ -123,7 +123,7 @@ def trainADMMandE2EandImplicit(model, epoch_nb, loss, optimizer, scheduler, trai
     trainLoader = DataLoader(trainDataset, batch_size_train, shuffle=True)
     valLoader = DataLoader(valDataset, valDataset.__len__(), shuffle=False)
     maxPsnrVal = -1000
-    for epoch in range(int(epoch_nb)):
+    for epoch in range(int(startEpoch), int(epoch_nb)):
         wandbLoggerDict = {'epoch': epoch}
         tempLosses = list()
         model.train()
@@ -131,11 +131,6 @@ def trainADMMandE2EandImplicit(model, epoch_nb, loss, optimizer, scheduler, trai
         tempNrmseDenumeratorSquare = 0
         tempNumel = 0
         tempTime = time.time()
-
-        if saveModelEpoch > 0:
-            if (epoch + 1 % saveModelEpoch == 0):
-                torch.save(model.state_dict(), saveDirectory+r"/" +
-                           "epoch" + str(epoch + 1) + ".pth")
 
         for idx, dataHR in enumerate(trainLoader, 0):
 
@@ -297,6 +292,10 @@ def trainADMMandE2EandImplicit(model, epoch_nb, loss, optimizer, scheduler, trai
                     epoch, valLoss, valNrmse, valPSNR))
         if wandbFlag:
             wandb.log(wandbLoggerDict)
+        if saveModelEpoch > 0:
+            if ((epoch + 1) % saveModelEpoch == 0):
+                torch.save(model.state_dict(), saveDirectory+r"/" +
+                           "epoch" + str(epoch + 1) + ".pth")
     
     torch.save(model.state_dict(), saveDirectory+r"/" +
                "epoch" + str(epoch + 1) + "END.pth")
@@ -464,7 +463,7 @@ def trainDCdenoiserPsi(model, epoch_nb, loss, optimizer, scheduler, trainDataset
         tempTime = time.time()
 
         if saveModelEpoch > 0:
-            if (epoch + 1 % saveModelEpoch == 0):
+            if ((epoch + 1) % saveModelEpoch == 0):
                 torch.save(model.state_dict(), saveDirectory+r"/" +
                            "epoch" + str(epoch + 1) + ".pth")
 

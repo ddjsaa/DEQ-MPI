@@ -15,8 +15,11 @@ from trainerClasses import *
 parser = argparse.ArgumentParser(description="DEQ-MPI Training")
 parser.add_argument("--useGPU", type=int, default=0,
                     help="GPU ID to be utilized")
+parser.add_argument("--outputRoot", type=str, default="",
+                    help="Optional output root; keeps reproduction weights separate from supplied checkpoints")
+parser.add_argument("--detectAnomaly", type=int, default=0,
+                    help="Enable expensive autograd anomaly tracing (0/1)")
 
-# Training & Optimizer Parameters
 parser.add_argument("--wd", type=float, default=0,
                     help='weight decay')
 parser.add_argument("--lr", type=float,
@@ -37,7 +40,6 @@ parser.add_argument("--wandbName", type=str,
                     default="deqmpi", help='experiment name for WANDB')
 parser.add_argument("--optionalString", type = str, default = "", help = 'Optional Naming for WanDB and saving model')
 
-# Training Forward Model Options
 parser.add_argument("--fixedNsStdFlag", type=int, default=1, help= '0: randomly generate noise std for each image, 1: fix noise std.')
 parser.add_argument("--pSNRdataList", type=str, default='40',
                     help='input pSNR, separate with comma for training of multiple different networks')
@@ -47,14 +49,12 @@ parser.add_argument("--mtxCode", type=str, default="./inhouseData/expMatinHouse.
 parser.add_argument("--nbOfSingulars", type=int,
                     default=250, help="Nb of singular values used for least squares initialization")
 
-# Data Processing Options
 
 parser.add_argument("--reScaleBetween", type=str, default="1,1",
                     help='scale images randomly between')
 parser.add_argument("--reScaleEpsilon", type=float, default=1, help="rescale epsilon value in inference by. Higher scaling may help improve performance for high pSNR")
 
 
-# Model options
 
 parser.add_argument("--modelType", type=str, default="DeqMPI", help="model type: ADMLD (Unrolled) or DeqMPI")
 
@@ -79,12 +79,13 @@ parser.add_argument("--useDCNormalization", type=int, default=1, help='Use Data 
 
 parser.add_argument("--preLoadDir", type=str, default="", help="preload denoiser network path")
 parser.add_argument("--preLoadDirDC", type=str, default="", help="preload learned consistency network path")
+parser.add_argument("--resumeModel", type=str, default="", help="resume full DEQ/ADMLD model state_dict path")
+parser.add_argument("--startEpoch", type=int, default=0, help="global epoch index to resume from")
 
-
-torch.autograd.set_detect_anomaly(True)
 
 opt = parser.parse_args()
 print(opt)
+torch.autograd.set_detect_anomaly(bool(opt.detectAnomaly))
 
 useGPUno = opt.useGPU
 torch.cuda.set_device(useGPUno)
@@ -122,14 +123,14 @@ layer_in_each_block = opt.layer_in_each_block
 growth_rate = opt.growth_rate
 nb_of_blocksL = opt.nb_of_blocksL
 
-#
-
 if opt.modelType == "ADMLD":
     resultFolder = "training/admld"
     trainType = 3
 elif opt.modelType == "DeqMPI":
     resultFolder = "training/deqmpi"
     trainType = 2
+if opt.outputRoot:
+    resultFolder = opt.outputRoot
 
 Ul = list()
 Sl = list()
@@ -227,6 +228,9 @@ def callMyFnc(nb_of_featuresL, nb_of_blocksL, growth_rate, nb_of_steps, nb_of_fe
 
         model = DEQFixedPoint(model2, anderson, tol = 1e-4, max_iter = 25, beta = 2.0)
 
+    if opt.resumeModel != "":
+        model.load_state_dict(torch.load(opt.resumeModel, map_location=next(model.parameters()).device))
+
     print("num params: ", sum(p.numel()
                                 for p in model.parameters() if p.requires_grad))
     
@@ -236,7 +240,10 @@ def callMyFnc(nb_of_featuresL, nb_of_blocksL, growth_rate, nb_of_steps, nb_of_fe
     optimizer = torch.optim.Adam(
         model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.StepLR(
-        optimizer, step_size=lrUpdateEpoch, gamma=0.5)
+        optimizer, step_size=max(1, lrUpdateEpoch), gamma=0.5)
+    if opt.startEpoch > 0:
+        for _ in range(opt.startEpoch):
+            scheduler.step()
 
     model, trainMetrics, valMetrics = trainADMMandE2EandImplicit(model=model,
                                                 epoch_nb=epoch_nb,
@@ -264,7 +271,8 @@ def callMyFnc(nb_of_featuresL, nb_of_blocksL, growth_rate, nb_of_steps, nb_of_fe
                                                 fixedNoiseStdFlag=fixedNsStdFlag,
                                                 nbOfSingulars=nbOfSingulars,
                                                 lambdaVal=reScaleEpsilon,
-                                                mode = trainType)
+                                                mode = trainType,
+                                                startEpoch = opt.startEpoch)
 
 
 for consistencyDim in consistencyDimList:

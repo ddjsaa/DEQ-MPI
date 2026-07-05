@@ -143,11 +143,13 @@ class consistencyNetworkMDspectral(nn.Module):
                 return proj2Tmtx(netUnProj, y, epsilon) # return reference Value back
 
             if isinstance(epsilon, torch.Tensor):
-                theInd = nrmVal < epsilon.squeeze()
-                nrmVal[theInd] = epsilon.squeeze()[theInd]
+                safeNorm = torch.maximum(nrmVal, epsilon.squeeze())
             else:
-                nrmVal[nrmVal < epsilon] = epsilon
-            netUnProj *= epsilon / nrmVal[:,None,None]
+                safeNorm = torch.clamp_min(nrmVal, epsilon)
+            # Avoid in-place edits on tensors required by norm backpropagation.
+            # This is algebraically identical to the original epsilon-ball
+            # normalization and is compatible with modern PyTorch autograd.
+            netUnProj = netUnProj * (epsilon / safeNorm[:,None,None])
 
         # netOut = (epsilon / nrmVal[:,None,None]) * (z2Ext - yExt)
 
@@ -400,11 +402,10 @@ class consistencyNetworkMD(nn.Module):
                 return proj2Tmtx(netUnProj, y, epsilon) # return reference Value back
 
             if isinstance(epsilon, torch.Tensor):
-                theInd = nrmVal < epsilon.squeeze()
-                nrmVal[theInd] = epsilon.squeeze()[theInd]
+                safeNorm = torch.maximum(nrmVal, epsilon.squeeze())
             else:
-                nrmVal[nrmVal < epsilon] = epsilon
-            netUnProj *= epsilon / nrmVal[:,None,None]
+                safeNorm = torch.clamp_min(nrmVal, epsilon)
+            netUnProj = netUnProj * (epsilon / safeNorm[:,None,None])
 
         # netOut = (epsilon / nrmVal[:,None,None]) * (z2Ext - yExt)
 

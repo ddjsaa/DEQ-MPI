@@ -20,6 +20,9 @@ parser = argparse.ArgumentParser(description="Rdn grid search")
 parser.add_argument("--useGPU", type=int, default=0,
                     help="GPU ID to be utilized")
 
+parser.add_argument("--outputRoot", type=str, default="",
+                    help="Optional output root; keeps reproduction weights separate from supplied checkpoints")
+
 parser.add_argument("--wd", type=float, default=0,
                     help='weight decay')
 
@@ -70,7 +73,10 @@ print(opt)
 
 asel = True
 dims = opt.dims
-resultFolder = "training/denoiser" if dims == 2 else "training/denoiser3d" 
+if opt.outputRoot:
+    resultFolder = opt.outputRoot
+else:
+    resultFolder = "training/denoiser" if dims == 2 else "training/denoiser3d"
 
 useGPUno = opt.useGPU
 torch.cuda.set_device(useGPUno)
@@ -140,7 +146,11 @@ for nb_of_features in nb_of_featuresList:
         print("number of trainable parameters: ",sum(p.numel() for p in model.parameters() if p.requires_grad))
         loss = nn.L1Loss().cuda()
         optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=epoch_nb // 5, gamma=0.5)
+        # Keep short smoke-test runs valid while preserving the paper setting
+        # (200 // 5 == 40) for full training.
+        scheduler = torch.optim.lr_scheduler.StepLR(
+            optimizer, step_size=max(1, epoch_nb // 5), gamma=0.5
+        )
 
         model, trainMetrics, valMetrics = trainDenoiser(model = model,
                                         epoch_nb = epoch_nb,
